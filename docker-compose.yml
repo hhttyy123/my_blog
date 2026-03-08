@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  blog:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./blog-data.json:/app/blog-data.json
+    environment:
+      - NODE_ENV=production
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - PORT=3000
+    restart: unless-stopped
