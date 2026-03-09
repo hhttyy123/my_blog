@@ -5,10 +5,43 @@ services:
     build: .
     ports:
       - "3000:3000"
-    volumes:
-      - ./blog-data.json:/app/blog-data.json
     environment:
       - NODE_ENV=production
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - PORT=3000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-my_secure_password}
+      - DB_NAME=${DB_NAME:-blog_db}
+    depends_on:
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - blog-network
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-my_secure_password}
+      - MYSQL_DATABASE=${DB_NAME:-blog_db}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-my_secure_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - blog-network
+
+volumes:
+  mysql-data:
+
+networks:
+  blog-network:
+    driver: bridge

@@ -8,6 +8,7 @@ dist/
 blog-data.json
 
 # 环境变量
+.env
 .env.local
 .env.*.local
 
