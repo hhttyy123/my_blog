@@ -4,6 +4,7 @@ import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
+const ADMIN_PASSWORD = 'Hty061120'
 
 const currentView = ref('home')
 const articles = ref([])
@@ -12,6 +13,12 @@ const sidebarOpen = ref(false)
 const bgImage = ref('')
 const currentTime = ref('')
 const currentDate = ref('')
+
+// 认证相关
+const isAuthenticated = ref(false)
+const showPasswordModal = ref(false)
+const passwordInput = ref('')
+const pendingAction = ref(null)
 
 // 编辑器相关
 const editingArticle = ref(null)
@@ -118,24 +125,57 @@ function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
+// 认证检查
+function requireAuth(callback) {
+  if (isAuthenticated.value) {
+    callback()
+  } else {
+    pendingAction.value = callback
+    showPasswordModal.value = true
+    passwordInput.value = ''
+  }
+}
+
+function submitPassword() {
+  if (passwordInput.value === ADMIN_PASSWORD) {
+    isAuthenticated.value = true
+    showPasswordModal.value = false
+    if (pendingAction.value) {
+      pendingAction.value()
+      pendingAction.value = null
+    }
+  } else {
+    alert('密码错误')
+    passwordInput.value = ''
+  }
+}
+
+function cancelPassword() {
+  showPasswordModal.value = false
+  passwordInput.value = ''
+  pendingAction.value = null
+}
+
 // 文章编辑相关函数
 function openEditor(article = null) {
-  if (article) {
-    editingArticle.value = article
-    editorTitle.value = article.title
-    editorContent.value = article.content
-    editorExcerpt.value = article.excerpt || ''
-    editorCategory.value = article.category || '技术'
-    editorTags.value = Array.isArray(article.tags) ? article.tags.join(', ') : (article.tags || '')
-  } else {
-    editingArticle.value = null
-    editorTitle.value = ''
-    editorContent.value = ''
-    editorExcerpt.value = ''
-    editorCategory.value = '技术'
-    editorTags.value = ''
-  }
-  currentView.value = 'editor'
+  requireAuth(() => {
+    if (article) {
+      editingArticle.value = article
+      editorTitle.value = article.title
+      editorContent.value = article.content
+      editorExcerpt.value = article.excerpt || ''
+      editorCategory.value = article.category || '技术'
+      editorTags.value = Array.isArray(article.tags) ? article.tags.join(', ') : (article.tags || '')
+    } else {
+      editingArticle.value = null
+      editorTitle.value = ''
+      editorContent.value = ''
+      editorExcerpt.value = ''
+      editorCategory.value = '技术'
+      editorTags.value = ''
+    }
+    currentView.value = 'editor'
+  })
 }
 
 function closeEditor() {
@@ -192,15 +232,17 @@ async function saveArticle() {
 }
 
 async function deleteArticle(id) {
-  if (!confirm('确定要删除这篇文章吗？')) return
+  requireAuth(async () => {
+    if (!confirm('确定要删除这篇文章吗？')) return
 
-  try {
-    await fetch(`${API_BASE}/articles/${id}`, { method: 'DELETE' })
-    articles.value = articles.value.filter(a => a.id !== id)
-  } catch (error) {
-    console.error('删除失败:', error)
-    alert('删除失败，请重试')
-  }
+    try {
+      await fetch(`${API_BASE}/articles/${id}`, { method: 'DELETE' })
+      articles.value = articles.value.filter(a => a.id !== id)
+    } catch (error) {
+      console.error('删除失败:', error)
+      alert('删除失败，请重试')
+    }
+  })
 }
 
 // 项目编辑相关状态 - 完全照抄文章的结构
@@ -214,24 +256,26 @@ const projectReadme = ref('')
 
 // 打开项目编辑器 - 对应 openEditor
 function openProjectEditor(project = null) {
-  if (project) {
-    editingProject.value = project
-    projectTitle.value = project.title
-    projectDescription.value = project.description
-    projectTech.value = Array.isArray(project.tech) ? project.tech.join(', ') : ''
-    projectLink.value = project.link || ''
-    projectGithubLink.value = project.github_link || ''
-    projectReadme.value = project.readme || ''
-  } else {
-    editingProject.value = null
-    projectTitle.value = ''
-    projectDescription.value = ''
-    projectTech.value = ''
-    projectLink.value = ''
-    projectGithubLink.value = ''
-    projectReadme.value = ''
-  }
-  currentView.value = 'projectEditor'
+  requireAuth(() => {
+    if (project) {
+      editingProject.value = project
+      projectTitle.value = project.title
+      projectDescription.value = project.description
+      projectTech.value = Array.isArray(project.tech) ? project.tech.join(', ') : ''
+      projectLink.value = project.link || ''
+      projectGithubLink.value = project.github_link || ''
+      projectReadme.value = project.readme || ''
+    } else {
+      editingProject.value = null
+      projectTitle.value = ''
+      projectDescription.value = ''
+      projectTech.value = ''
+      projectLink.value = ''
+      projectGithubLink.value = ''
+      projectReadme.value = ''
+    }
+    currentView.value = 'projectEditor'
+  })
 }
 
 // 关闭项目编辑器 - 对应 closeEditor
@@ -302,15 +346,17 @@ async function viewProject(id) {
 
 // 删除项目
 async function deleteProject(id) {
-  if (!confirm('确定要删除这个项目吗？')) return
+  requireAuth(async () => {
+    if (!confirm('确定要删除这个项目吗？')) return
 
-  try {
-    await fetch(`${API_BASE}/projects/${id}`, { method: 'DELETE' })
-    projects.value = projects.value.filter(p => p.id !== id)
-  } catch (error) {
-    console.error('删除失败:', error)
-    alert('删除失败，请重试')
-  }
+    try {
+      await fetch(`${API_BASE}/projects/${id}`, { method: 'DELETE' })
+      projects.value = projects.value.filter(p => p.id !== id)
+    } catch (error) {
+      console.error('删除失败:', error)
+      alert('删除失败，请重试')
+    }
+  })
 }
 
 // 查看文章详情
@@ -955,6 +1001,25 @@ watch(currentView, async (newView) => {
         </article>
       </div>
     </main>
+  </div>
+
+  <!-- 密码输入弹窗 -->
+  <div v-if="showPasswordModal" class="password-modal-overlay" @click.self="cancelPassword">
+    <div class="password-modal">
+      <h3 class="password-modal-title">需要管理员权限</h3>
+      <p class="password-modal-desc">请输入密码以继续操作</p>
+      <input
+        v-model="passwordInput"
+        type="password"
+        class="password-modal-input"
+        placeholder="请输入密码"
+        @keyup.enter="submitPassword"
+      />
+      <div class="password-modal-buttons">
+        <button @click="cancelPassword" class="password-modal-btn cancel">取消</button>
+        <button @click="submitPassword" class="password-modal-btn confirm">确定</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -2386,5 +2451,92 @@ watch(currentView, async (newView) => {
   .article-detail-content {
     font-size: 1rem;
   }
+}
+
+/* ==================== 密码弹窗 ==================== */
+.password-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+
+.password-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.password-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.password-modal-desc {
+  color: #6b7280;
+  margin: 0 0 1.5rem 0;
+  font-size: 0.875rem;
+}
+
+.password-modal-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+  box-sizing: border-box;
+}
+
+.password-modal-input:focus {
+  outline: none;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+.password-modal-buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.password-modal-btn {
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.password-modal-btn.cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.password-modal-btn.cancel:hover {
+  background: #e5e7eb;
+}
+
+.password-modal-btn.confirm {
+  background: #22c55e;
+  color: white;
+}
+
+.password-modal-btn.confirm:hover {
+  background: #16a34a;
 }
 </style>
