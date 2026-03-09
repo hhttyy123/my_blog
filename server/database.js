@@ -3,17 +3,39 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-// 创建连接池
+const dbName = process.env.DB_NAME || 'blog_db'
+
+// 创建连接池（不指定数据库，先连接 MySQL）
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '3306'),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'blog_db',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
 })
+
+// 带数据库的连接池
+let dbPool = null
+
+// 创建带数据库的连接池
+async function createDbPool() {
+  if (dbPool) return dbPool
+
+  dbPool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: dbName,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+  })
+
+  return dbPool
+}
 
 // 初始化数据库（创建表）
 async function initDatabase() {
@@ -21,11 +43,19 @@ async function initDatabase() {
 
   try {
     // 创建数据库（如果不存在）
-    await connection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'blog_db'} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
-    await connection.query(`USE ${process.env.DB_NAME || 'blog_db'}`)
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ${dbName} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
+    console.log(`数据库 ${dbName} 创建成功或已存在`)
+
+    connection.release()
+
+    // 创建带数据库的连接池
+    await createDbPool()
+    const dbConnection = await dbPool.getConnection()
 
     // 创建文章表
-    await connection.query(`
+
+    // 创建文章表
+    await dbConnection.query(`
       CREATE TABLE IF NOT EXISTS articles (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(200) NOT NULL,
@@ -40,30 +70,31 @@ async function initDatabase() {
     `)
 
     // 创建项目表
-    await connection.query(`
+    await dbConnection.query(`
       CREATE TABLE IF NOT EXISTS projects (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(200) NOT NULL,
         description TEXT,
         tech JSON,
         link VARCHAR(500),
+        github_link VARCHAR(500),
+        readme TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)
 
     // 检查是否有数据，没有则插入示例数据
-    const [articles] = await connection.query('SELECT COUNT(*) as count FROM articles')
+    const [articles] = await dbConnection.query('SELECT COUNT(*) as count FROM articles')
     if (articles[0].count === 0) {
-      await seedData(connection)
+      await seedData(dbConnection)
     }
 
+    dbConnection.release()
     console.log('MySQL 数据库初始化成功')
   } catch (error) {
     console.error('数据库初始化失败:', error)
     throw error
-  } finally {
-    connection.release()
   }
 }
 
@@ -136,7 +167,7 @@ async function seedData(connection) {
 
 // 获取连接池
 export function getDatabase() {
-  return pool
+  return dbPool || pool
 }
 
 export { initDatabase }

@@ -26,6 +26,11 @@ const vditorRef = ref(null)
 const currentArticle = ref(null)
 const renderedContent = ref('')
 
+// 项目详情相关
+const currentProject = ref(null)
+const renderedProjectReadme = ref('')
+const projectVditorRef = ref(null)
+
 // Markdown 渲染
 async function renderMarkdown() {
   if (!currentArticle.value || !currentArticle.value.content) {
@@ -74,57 +79,8 @@ onMounted(() => {
   updateDateTime()
   setInterval(updateDateTime, 1000)
 
-  // 使用示例数据
-  articles.value = [
-    {
-      id: 1,
-      title: 'Vue 3 响应式原理深度解析',
-      content: 'Vue 3 使用 Proxy 替代了 Vue 2 的 Object.defineProperty...',
-      excerpt: '深入探讨 Vue 3 的响应式系统，了解 Proxy 如何实现更高效的数据监听',
-      category: '前端',
-      date: '2024.03.08',
-      tags: ['Vue', 'JavaScript', '响应式']
-    },
-    {
-      id: 2,
-      title: 'CSS Grid 布局完全指南',
-      content: 'CSS Grid 是一个强大的二维布局系统...',
-      excerpt: '从基础到高级，全面掌握 CSS Grid 布局的使用方法和最佳实践',
-      category: '前端',
-      date: '2024.03.07',
-      tags: ['CSS', '布局', '教程']
-    },
-    {
-      id: 3,
-      title: 'JavaScript 异步编程实战',
-      content: '异步编程是 JavaScript 的核心概念之一...',
-      excerpt: '深入理解 Promise、async/await，掌握异步编程的最佳实践',
-      category: '技术',
-      date: '2024.03.06',
-      tags: ['JavaScript', '异步', 'Promise']
-    }
-  ]
-
-  projects.value = [
-    {
-      id: 1,
-      title: '个人博客系统',
-      description: '基于 Vue 3 的现代化博客平台',
-      tech: ['Vue.js', 'Vite', 'JavaScript']
-    },
-    {
-      id: 2,
-      title: '天气预报应用',
-      description: '实时天气数据展示应用',
-      tech: ['React', 'API', 'CSS']
-    },
-    {
-      id: 3,
-      title: '任务管理工具',
-      description: '简洁高效的任务管理应用',
-      tech: ['Vue.js', 'Pinia', 'Element']
-    }
-  ]
+  // 从 API 获取真实数据
+  fetchData()
 })
 
 async function fetchData() {
@@ -247,6 +203,116 @@ async function deleteArticle(id) {
   }
 }
 
+// 项目编辑相关状态 - 完全照抄文章的结构
+const editingProject = ref(null)
+const projectTitle = ref('')
+const projectDescription = ref('')
+const projectTech = ref('')
+const projectLink = ref('')
+const projectGithubLink = ref('')
+const projectReadme = ref('')
+
+// 打开项目编辑器 - 对应 openEditor
+function openProjectEditor(project = null) {
+  if (project) {
+    editingProject.value = project
+    projectTitle.value = project.title
+    projectDescription.value = project.description
+    projectTech.value = Array.isArray(project.tech) ? project.tech.join(', ') : ''
+    projectLink.value = project.link || ''
+    projectGithubLink.value = project.github_link || ''
+    projectReadme.value = project.readme || ''
+  } else {
+    editingProject.value = null
+    projectTitle.value = ''
+    projectDescription.value = ''
+    projectTech.value = ''
+    projectLink.value = ''
+    projectGithubLink.value = ''
+    projectReadme.value = ''
+  }
+  currentView.value = 'projectEditor'
+}
+
+// 关闭项目编辑器 - 对应 closeEditor
+function closeProjectEditor() {
+  currentView.value = 'projects'
+  editingProject.value = null
+}
+
+// 保存项目 - 完全照抄 saveArticle
+async function saveProject() {
+  // 从编辑器获取最新 README 内容
+  if (projectVditorRef.value) {
+    projectReadme.value = projectVditorRef.value.getValue()
+  }
+
+  if (!projectTitle.value.trim()) {
+    alert('请填写项目标题')
+    return
+  }
+
+  const projectData = {
+    title: projectTitle.value.trim(),
+    description: projectDescription.value.trim(),
+    tech: projectTech.value.split(',').map(t => t.trim()).filter(t => t),
+    link: projectLink.value.trim(),
+    github_link: projectGithubLink.value.trim(),
+    readme: projectReadme.value
+  }
+
+  try {
+    if (editingProject.value) {
+      const res = await fetch(`${API_BASE}/projects/${editingProject.value.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectData)
+      })
+      const updated = await res.json()
+      const index = projects.value.findIndex(p => p.id === editingProject.value.id)
+      if (index !== -1) projects.value[index] = updated
+    } else {
+      const res = await fetch(`${API_BASE}/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectData)
+      })
+      const newProject = await res.json()
+      projects.value.unshift(newProject)
+    }
+    closeProjectEditor()
+  } catch (error) {
+    console.error('保存失败:', error)
+    alert('保存失败，请重试')
+  }
+}
+
+// 查看项目 - 对应 viewArticle
+async function viewProject(id) {
+  try {
+    const res = await fetch(`${API_BASE}/projects/${id}`)
+    currentProject.value = await res.json()
+    currentView.value = 'projectDetail'
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  } catch (error) {
+    console.error('加载项目失败:', error)
+    alert('加载项目失败')
+  }
+}
+
+// 删除项目
+async function deleteProject(id) {
+  if (!confirm('确定要删除这个项目吗？')) return
+
+  try {
+    await fetch(`${API_BASE}/projects/${id}`, { method: 'DELETE' })
+    projects.value = projects.value.filter(p => p.id !== id)
+  } catch (error) {
+    console.error('删除失败:', error)
+    alert('删除失败，请重试')
+  }
+}
+
 // 查看文章详情
 async function viewArticle(id) {
   try {
@@ -260,7 +326,26 @@ async function viewArticle(id) {
   }
 }
 
-// 导入 MD 文件
+// 渲染项目 README - 完全照抄 renderMarkdown
+async function renderProjectReadme() {
+  if (!currentProject.value || !currentProject.value.readme) {
+    renderedProjectReadme.value = ''
+    return
+  }
+  try {
+    renderedProjectReadme.value = await Vditor.md2html(currentProject.value.readme, { mode: 'light' })
+  } catch (e) {
+    console.error('README 渲染错误:', e)
+    renderedProjectReadme.value = '<pre>' + currentProject.value.readme + '</pre>'
+  }
+}
+
+// 监听 currentProject 变化时重新渲染 - 照抄 watch(currentArticle)
+watch(currentProject, () => {
+  renderProjectReadme()
+})
+
+// 导入文章 MD 文件
 function importMDFile(event) {
   const file = event.target.files[0]
   if (!file) return
@@ -280,6 +365,33 @@ function importMDFile(event) {
     // 如果文件名作为标题
     if (!editorTitle.value) {
       editorTitle.value = file.name.replace('.md', '')
+    }
+  }
+  reader.readAsText(file)
+  // 重置 input 以便重复选择同一文件
+  event.target.value = ''
+}
+
+// 导入项目 README MD 文件
+function importProjectMDFile(event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  if (!file.name.endsWith('.md')) {
+    alert('请选择 .md 文件')
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const content = e.target.result
+    if (projectVditorRef.value) {
+      projectVditorRef.value.setValue(content)
+      projectReadme.value = content
+    }
+    // 如果文件名作为项目名
+    if (!projectTitle.value) {
+      projectTitle.value = file.name.replace('.md', '')
     }
   }
   reader.readAsText(file)
@@ -326,6 +438,46 @@ watch(currentView, async (newView) => {
       after: () => {
         if (editorContent.value) {
           vditorRef.value.setValue(editorContent.value)
+        }
+      }
+    })
+  } else if (newView === 'projectEditor') {
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // 先销毁旧实例
+    if (projectVditorRef.value) {
+      try {
+        projectVditorRef.value.destroy()
+        projectVditorRef.value = null
+      } catch (e) {
+        console.log('销毁项目编辑器实例:', e)
+      }
+    }
+
+    // 创建新实例
+    projectVditorRef.value = new Vditor('project-vditor', {
+      height: 400,
+      placeholder: '输入项目的 README 内容...',
+      theme: 'classic',
+      counter: {
+        enable: true
+      },
+      cache: {
+        enable: false
+      },
+      mode: 'ir',
+      toolbar: [
+        'headings', 'bold', 'italic', 'strike', '|',
+        'list', 'ordered-list', 'check', '|',
+        'quote', 'code', 'inline-code', '|',
+        'link', 'table', '|',
+        'undo', 'redo', '|',
+        'preview', 'fullscreen'
+      ],
+      after: () => {
+        if (projectReadme.value) {
+          projectVditorRef.value.setValue(projectReadme.value)
         }
       }
     })
@@ -417,6 +569,18 @@ watch(currentView, async (newView) => {
           </a>
           <a
             class="nav-item"
+            @click="openProjectEditor()"
+          >
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </span>
+            <span class="nav-text" v-show="sidebarOpen">添加</span>
+          </a>
+          <a
+            class="nav-item"
             :class="{ active: currentView === 'about' }"
             @click="navigate('about')"
           >
@@ -497,7 +661,7 @@ watch(currentView, async (newView) => {
         <div class="articles-list">
           <article v-for="(article, index) in articles" :key="article.id" class="article-card" @click="viewArticle(article.id)" :style="{ animationDelay: `${index * 0.05}s` }">
             <div class="article-number">{{ String(index + 1).padStart(2, '0') }}</div>
-            <div class="article-content">
+            <div class="article-content" @click="viewArticle(article.id)">
               <div class="article-meta">
                 <span class="article-date">{{ article.date }}</span>
                 <span class="article-dot">·</span>
@@ -508,22 +672,20 @@ watch(currentView, async (newView) => {
               <div class="article-tags">
                 <span v-for="tag in article.tags" :key="tag" class="tag">{{ tag }}</span>
               </div>
-              <div class="article-actions" @click.stop>
-                <button class="action-btn edit-btn" @click="openEditor(article)">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
-                  编辑
-                </button>
-                <button class="action-btn delete-btn" @click="deleteArticle(article.id)">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  </svg>
-                  删除
-                </button>
-              </div>
+            </div>
+            <div class="article-actions" @click.stop>
+              <button class="action-btn edit-btn" @click="openEditor(article)" title="编辑">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+              <button class="action-btn delete-btn" @click="deleteArticle(article.id)" title="删除">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
             </div>
           </article>
         </div>
@@ -536,15 +698,33 @@ watch(currentView, async (newView) => {
           <h1 class="page-title">项目</h1>
           <p class="page-subtitle">我构建的作品和学到的东西</p>
         </div>
-        <div class="projects-grid">
-          <div v-for="(project, index) in projects" :key="project.id" class="project-card" :style="{ animationDelay: `${index * 0.05}s` }">
-            <div class="project-number">{{ String(index + 1).padStart(2, '0') }}</div>
-            <div class="project-content">
-              <h3 class="project-title">{{ project.title }}</h3>
-              <p class="project-description">{{ project.description }}</p>
-              <div class="project-tech">
-                <span v-for="tech in project.tech" :key="tech" class="tech-badge">{{ tech }}</span>
+        <div class="projects-list">
+          <div v-for="(project, index) in projects" :key="project.id" class="project-item" :style="{ animationDelay: `${index * 0.05}s` }">
+            <div class="project-item-main" @click="viewProject(project.id)">
+              <div class="project-item-header">
+                <div class="project-item-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="project-icon">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <span class="project-name">{{ project.title }}</span>
+                  <span class="project-public">Public</span>
+                </div>
               </div>
+              <p class="project-item-desc">{{ project.description }}</p>
+            </div>
+            <div class="project-item-actions" @click.stop>
+              <button class="project-action-btn edit-btn" @click="openProjectEditor(project)" title="编辑">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+              <button class="project-action-btn delete-btn" @click="deleteProject(project.id)" title="删除">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -562,18 +742,26 @@ watch(currentView, async (newView) => {
               <p>主要会用C/C++、Python、Javascript等等。</p>
             </div>
             <div class="social-links">
-              <a href="#" class="social-link">
+              <a href="https://github.com/hhttyy123" target="_blank" class="social-link">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                 </svg>
                 <span>GitHub</span>
               </a>
-              <a href="#" class="social-link">
+              <a href="https://github.com/hhttyy123" target="_blank" class="social-link">
+                <span>https://github.com/hhttyy123</span>
+              </a>
+            </div>
+            <div class="social-links">
+              <a href="mailto:448181385@qq.com" class="social-link">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                   <polyline points="22,6 12,13 2,6"/>
                 </svg>
                 <span>Email</span>
+              </a>
+              <a href="mailto:448181385@qq.com" class="social-link">
+                <span>448181385@qq.com</span>
               </a>
             </div>
           </div>
@@ -639,6 +827,57 @@ watch(currentView, async (newView) => {
         </div>
       </div>
 
+      <!-- 项目编辑器视图 -->
+      <div v-else-if="currentView === 'projectEditor'" class="page-view editor-view">
+        <div class="page-header">
+          <div class="page-decoration"></div>
+          <h1 class="page-title">{{ editingProject ? '编辑项目' : '添加项目' }}</h1>
+          <p class="page-subtitle">{{ editingProject ? '修改项目信息' : '添加你的作品' }}</p>
+        </div>
+        <div class="editor-container">
+          <div class="editor-form">
+            <div class="form-group">
+              <label class="form-label">导入 README 文件</label>
+              <label class="file-import-btn">
+                <input type="file" accept=".md" @change="importProjectMDFile" style="display: none" />
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                选择 README 文件
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="form-label">项目名称</label>
+              <input v-model="projectTitle" class="form-input" placeholder="输入项目名称..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">项目描述</label>
+              <textarea v-model="projectDescription" class="form-textarea" rows="2" placeholder="简短描述这个项目..."></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">技术栈（用逗号分隔）</label>
+              <input v-model="projectTech" class="form-input" placeholder="Vue.js, Python, MySQL..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">GitHub 仓库链接</label>
+              <input v-model="projectGithubLink" class="form-input" placeholder="https://github.com/username/repo" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">README 内容（支持 Markdown）</label>
+              <div id="project-vditor" class="vditor-container"></div>
+            </div>
+            <div class="editor-actions">
+              <button class="btn btn-secondary" @click="navigate('projects')">取消</button>
+              <button class="btn btn-primary" @click="saveProject">
+                {{ editingProject ? '更新项目' : '添加项目' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 文章详情页 -->
       <div v-else-if="currentView === 'articleDetail'" class="page-view article-detail-view">
         <div class="article-detail-header">
@@ -671,6 +910,48 @@ watch(currentView, async (newView) => {
           </div>
           <h1 class="article-detail-title">{{ currentArticle.title }}</h1>
           <div class="article-detail-content markdown-body" v-html="renderedContent"></div>
+        </article>
+      </div>
+
+      <!-- 项目详情页 -->
+      <div v-else-if="currentView === 'projectDetail'" class="page-view project-detail-view">
+        <div class="article-detail-header">
+          <button class="back-btn" @click="navigate('projects')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            返回列表
+          </button>
+          <div class="detail-header-actions">
+            <span v-if="currentProject?.github_link" class="github-link-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+              {{ currentProject.github_link }}
+            </span>
+            <button class="edit-article-btn" @click="openProjectEditor(currentProject)" v-if="currentProject">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              编辑项目
+            </button>
+          </div>
+        </div>
+        <article class="article-detail" v-if="currentProject">
+          <div class="article-detail-meta">
+            <span class="detail-date">项目</span>
+            <template v-if="currentProject.tech && currentProject.tech.length">
+              <span class="detail-dot">·</span>
+              <span class="detail-tags">
+                <span v-for="tech in currentProject.tech" :key="tech" class="detail-tag">{{ tech }}</span>
+              </span>
+            </template>
+          </div>
+          <h1 class="article-detail-title">{{ currentProject.title }}</h1>
+          <p class="project-detail-desc">{{ currentProject.description }}</p>
+          <div class="article-detail-content markdown-body" v-html="renderedProjectReadme"></div>
         </article>
       </div>
     </main>
@@ -771,9 +1052,7 @@ watch(currentView, async (newView) => {
   border: 1px solid rgba(74, 222, 128, 0.3);
   border-radius: 14px;
   box-shadow: var(--shadow-md);
-  z-index: 1000;
   transition: all 0.3s ease;
-  cursor: default;
 }
 
 .datetime-widget:hover {
@@ -1136,7 +1415,7 @@ watch(currentView, async (newView) => {
   font-family: 'Inter', sans-serif;
   font-size: 1rem;
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 /* ==================== 文章卡片 ==================== */
@@ -1147,7 +1426,8 @@ watch(currentView, async (newView) => {
 
 .article-card {
   display: flex;
-  gap: 1.5rem;
+  align-items: center;
+  gap: 1rem;
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -1274,105 +1554,144 @@ watch(currentView, async (newView) => {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* ==================== 项目卡片 ==================== */
-.projects-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.5rem;
+/* ==================== 项目列表（GitHub 风格）==================== */
+.projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.project-card {
+.project-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 1.5rem;
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  padding: 2rem;
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1.2px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
   opacity: 0;
   animation: fadeInUp 0.6s ease forwards;
-  position: relative;
-  overflow: hidden;
+  transition: all 0.3s ease;
 }
 
-.project-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), transparent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.4s ease;
-}
-
-.project-card:hover {
+.project-item:hover {
   border-color: #22c55e;
-  box-shadow: var(--shadow-lg), 0 0 40px var(--accent-glow);
-  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
-.project-card:hover::before {
-  transform: scaleX(1);
+.project-item-main {
+  flex: 1;
+  cursor: pointer;
+  min-width: 0;
 }
 
-.project-number {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  font-family: 'Playfair Display', serif;
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--accent);
-  opacity: 0.15;
-  pointer-events: none;
+.project-item-header {
+  margin-bottom: 0.35rem;
 }
 
-.project-content {
-  position: relative;
-  z-index: 1;
-}
-
-.project-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 1.25rem;
-  font-weight: 600;
-  background: linear-gradient(135deg, #ffffff 0%, #bbf7d0 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 0.75rem;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
-
-.project-description {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 400;
-  color: var(--text-muted);
-  line-height: 1.7;
-  margin-bottom: 1.25rem;
-}
-
-.project-tech {
+.project-item-title {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.project-icon {
+  color: #86efac;
+  flex-shrink: 0;
+}
+
+.project-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #22c55e;
+}
+
+.project-public {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 6px;
+  padding: 0.05rem 0.3rem;
+  margin-left: 0.5rem;
+}
+
+.project-item-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #bbf7d0;
+  line-height: 1.5;
+}
+
+.project-item-meta {
+  display: flex;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
-.tech-badge {
+.project-item-language {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   font-family: 'Inter', sans-serif;
   font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.4rem 0.8rem;
+  color: var(--text-muted);
+}
+
+.language-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  border-radius: 8px;
+}
+
+.language-name {
+  color: #86efac;
+}
+
+.project-item-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.project-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.project-action-btn:hover {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+.project-action-btn.edit-btn:hover {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   color: #ffffff;
-  letter-spacing: 0.05em;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.project-action-btn.delete-btn:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
 }
 
 /* ==================== 关于页 ==================== */
@@ -1458,47 +1777,46 @@ watch(currentView, async (newView) => {
 /* ==================== 文章操作按钮 ==================== */
 .article-actions {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
 }
 
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.8rem;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.7rem;
-  font-weight: 500;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.2);
   border-radius: 6px;
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.3s ease;
-  border: none;
 }
 
-.edit-btn {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(134, 239, 172, 0.15) 100%);
-  color: #86efac;
+.action-btn:hover {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border-color: #22c55e;
 }
 
-.edit-btn:hover {
+.action-btn.edit-btn:hover {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   color: #ffffff;
 }
 
-.delete-btn {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-}
-
-.delete-btn:hover {
+.action-btn.delete-btn:hover {
   background: #ef4444;
+  border-color: #ef4444;
   color: #ffffff;
 }
 
 /* ==================== 编辑器 ==================== */
 .editor-view {
-  max-width: 900px;
+  max-width: 1200px;
 }
 
 .editor-container {
@@ -1675,11 +1993,18 @@ watch(currentView, async (newView) => {
 
 /* ==================== 文章详情页 ==================== */
 .article-detail-view {
-  max-width: 800px;
+  max-width: 1100px;
 }
 
 .article-detail-header {
   margin-bottom: 2rem;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detail-header-actions {
   display: flex;
   gap: 1rem;
   align-items: center;
@@ -1899,6 +2224,57 @@ watch(currentView, async (newView) => {
   margin: 2rem 0;
 }
 
+/* ==================== 项目详情页 ==================== */
+.project-detail-view {
+  max-width: 1100px;
+}
+
+.github-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.github-link-btn:hover {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+}
+
+.project-detail-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  color: #bbf7d0;
+  line-height: 1.7;
+  margin-bottom: 2rem;
+}
+
+.readme-content {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 2rem;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.no-readme {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* ==================== 动画 ==================== */
 @keyframes fadeIn {
   to {
@@ -1966,10 +2342,6 @@ watch(currentView, async (newView) => {
 
   .hero {
     padding: 3rem 0;
-  }
-
-  .projects-grid {
-    grid-template-columns: 1fr;
   }
 
   .about-content {

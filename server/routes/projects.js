@@ -45,15 +45,15 @@ router.get('/:id', async (req, res) => {
 
 // 创建项目
 router.post('/', async (req, res) => {
-  const { title, description, tech, link } = req.body
+  const { title, description, tech, link, github_link, readme } = req.body
 
   try {
     const db = getDatabase()
     const techJson = Array.isArray(tech) ? JSON.stringify(tech) : tech
 
     const [result] = await db.query(
-      'INSERT INTO projects (title, description, tech, link) VALUES (?, ?, ?, ?)',
-      [title, description, techJson, link || '']
+      'INSERT INTO projects (title, description, tech, link, github_link, readme) VALUES (?, ?, ?, ?, ?, ?)',
+      [title, description, techJson, link, github_link, readme]
     )
 
     const [projects] = await db.query('SELECT * FROM projects WHERE id = ?', [result.insertId])
@@ -71,15 +71,15 @@ router.post('/', async (req, res) => {
 
 // 更新项目
 router.put('/:id', async (req, res) => {
-  const { title, description, tech, link } = req.body
+  const { title, description, tech, link, github_link, readme } = req.body
 
   try {
     const db = getDatabase()
     const techJson = Array.isArray(tech) ? JSON.stringify(tech) : tech
 
     await db.query(
-      'UPDATE projects SET title = ?, description = ?, tech = ?, link = ? WHERE id = ?',
-      [title, description, techJson, link || '', req.params.id]
+      'UPDATE projects SET title = ?, description = ?, tech = ?, link = ?, github_link = ?, readme = ? WHERE id = ?',
+      [title, description, techJson, link, github_link, readme, req.params.id]
     )
 
     const [projects] = await db.query('SELECT * FROM projects WHERE id = ?', [req.params.id])

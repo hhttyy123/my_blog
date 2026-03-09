@@ -7,7 +7,10 @@
       "Bash(timeout 3 cat:*)",
       "Bash(curl:*)",
       "Bash(set PORT=3002:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(node:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }
