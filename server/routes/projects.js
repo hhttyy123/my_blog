@@ -3,11 +3,25 @@ import { getDatabase } from '../database.js'
 
 const router = express.Router()
 
-// 获取所有项目
+// 获取所有项目（支持分页）
 router.get('/', async (req, res) => {
   try {
     const db = getDatabase()
-    const [projects] = await db.query('SELECT * FROM projects ORDER BY id DESC')
+
+    // 分页参数
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    const offset = (page - 1) * limit
+
+    // 获取总数
+    const [countResult] = await db.query('SELECT COUNT(*) as total FROM projects')
+    const total = countResult[0].total
+
+    // 获取项目列表
+    const [projects] = await db.query(
+      'SELECT * FROM projects ORDER BY id DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    )
 
     // 解析 tech 字段（支持逗号分隔的字符串或 JSON 数组）
     const parsedProjects = projects.map(project => {
@@ -23,7 +37,15 @@ router.get('/', async (req, res) => {
       return { ...project, tech }
     })
 
-    res.json(parsedProjects)
+    res.json({
+      data: parsedProjects,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    })
   } catch (error) {
     console.error('获取项目失败:', error)
     res.status(500).json({ error: error.message })

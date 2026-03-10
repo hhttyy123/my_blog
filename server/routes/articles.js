@@ -3,11 +3,25 @@ import { getDatabase } from '../database.js'
 
 const router = express.Router()
 
-// 获取所有文章
+// 获取所有文章（支持分页）
 router.get('/', async (req, res) => {
   try {
     const db = getDatabase()
-    const [articles] = await db.query('SELECT * FROM articles ORDER BY id DESC')
+
+    // 分页参数
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    const offset = (page - 1) * limit
+
+    // 获取总数
+    const [countResult] = await db.query('SELECT COUNT(*) as total FROM articles')
+    const total = countResult[0].total
+
+    // 获取文章列表
+    const [articles] = await db.query(
+      'SELECT * FROM articles ORDER BY id DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    )
 
     // 解析 tags 字段（支持逗号分隔的字符串或 JSON 数组）
     const parsedArticles = articles.map(article => {
@@ -23,7 +37,15 @@ router.get('/', async (req, res) => {
       return { ...article, tags }
     })
 
-    res.json(parsedArticles)
+    res.json({
+      data: parsedArticles,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    })
   } catch (error) {
     console.error('获取文章失败:', error)
     res.status(500).json({ error: error.message })

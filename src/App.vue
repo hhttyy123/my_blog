@@ -14,6 +14,10 @@ const bgImage = ref('')
 const currentTime = ref('')
 const currentDate = ref('')
 
+// 分页相关
+const articlesPagination = ref({ page: 1, limit: 10, total: 0, totalPages: 0 })
+const projectsPagination = ref({ page: 1, limit: 10, total: 0, totalPages: 0 })
+
 // 认证相关
 const isAuthenticated = ref(false)
 const showPasswordModal = ref(false)
@@ -98,19 +102,23 @@ async function fetchData() {
   }
 }
 
-async function fetchArticles() {
+async function fetchArticles(page = 1) {
   try {
-    const res = await fetch(`${API_BASE}/articles`)
-    articles.value = await res.json()
+    const res = await fetch(`${API_BASE}/articles?page=${page}&limit=${articlesPagination.value.limit}`)
+    const result = await res.json()
+    articles.value = result.data
+    articlesPagination.value = result.pagination
   } catch (error) {
     console.error('Failed to fetch articles:', error)
   }
 }
 
-async function fetchProjects() {
+async function fetchProjects(page = 1) {
   try {
-    const res = await fetch(`${API_BASE}/projects`)
-    projects.value = await res.json()
+    const res = await fetch(`${API_BASE}/projects?page=${page}&limit=${projectsPagination.value.limit}`)
+    const result = await res.json()
+    projects.value = result.data
+    projectsPagination.value = result.pagination
   } catch (error) {
     console.error('Failed to fetch projects:', error)
   }
@@ -119,6 +127,17 @@ async function fetchProjects() {
 function navigate(view) {
   currentView.value = view
   window.scrollTo({ top: 0, behavior: 'smooth' })
+
+  // 切换到文章页时重置页码并获取数据
+  if (view === 'articles') {
+    articlesPagination.value.page = 1
+    fetchArticles(1)
+  }
+  // 切换到项目页时重置页码并获取数据
+  if (view === 'projects') {
+    projectsPagination.value.page = 1
+    fetchProjects(1)
+  }
 }
 
 function toggleSidebar() {
@@ -357,6 +376,21 @@ async function deleteProject(id) {
       alert('删除失败，请重试')
     }
   })
+}
+
+// 分页函数
+function goToArticlesPage(page) {
+  if (page >= 1 && page <= articlesPagination.value.totalPages) {
+    fetchArticles(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+function goToProjectsPage(page) {
+  if (page >= 1 && page <= projectsPagination.value.totalPages) {
+    fetchProjects(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 }
 
 // 查看文章详情
@@ -706,7 +740,7 @@ watch(currentView, async (newView) => {
         </div>
         <div class="articles-list">
           <article v-for="(article, index) in articles" :key="article.id" class="article-card" @click="viewArticle(article.id)" :style="{ animationDelay: `${index * 0.05}s` }">
-            <div class="article-number">{{ String(index + 1).padStart(2, '0') }}</div>
+            <div class="article-number">{{ String((articlesPagination.page - 1) * articlesPagination.limit + index + 1).padStart(2, '0') }}</div>
             <div class="article-content" @click="viewArticle(article.id)">
               <div class="article-meta">
                 <span class="article-date">{{ article.date }}</span>
@@ -734,6 +768,26 @@ watch(currentView, async (newView) => {
               </button>
             </div>
           </article>
+        </div>
+        <!-- 文章分页 -->
+        <div class="pagination" v-if="articlesPagination.totalPages > 1">
+          <button
+            class="pagination-btn"
+            :disabled="articlesPagination.page === 1"
+            @click="goToArticlesPage(articlesPagination.page - 1)"
+          >
+            上一页
+          </button>
+          <span class="pagination-info">
+            {{ articlesPagination.page }} / {{ articlesPagination.totalPages }}
+          </span>
+          <button
+            class="pagination-btn"
+            :disabled="articlesPagination.page === articlesPagination.totalPages"
+            @click="goToArticlesPage(articlesPagination.page + 1)"
+          >
+            下一页
+          </button>
         </div>
       </div>
 
@@ -773,6 +827,26 @@ watch(currentView, async (newView) => {
               </button>
             </div>
           </div>
+        </div>
+        <!-- 项目分页 -->
+        <div class="pagination" v-if="projectsPagination.totalPages > 1">
+          <button
+            class="pagination-btn"
+            :disabled="projectsPagination.page === 1"
+            @click="goToProjectsPage(projectsPagination.page - 1)"
+          >
+            上一页
+          </button>
+          <span class="pagination-info">
+            {{ projectsPagination.page }} / {{ projectsPagination.totalPages }}
+          </span>
+          <button
+            class="pagination-btn"
+            :disabled="projectsPagination.page === projectsPagination.totalPages"
+            @click="goToProjectsPage(projectsPagination.page + 1)"
+          >
+            下一页
+          </button>
         </div>
       </div>
 
@@ -1877,6 +1951,47 @@ watch(currentView, async (newView) => {
   background: #ef4444;
   border-color: #ef4444;
   color: #ffffff;
+}
+
+/* ==================== 分页组件 ==================== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding: 1rem;
+}
+
+.pagination-btn {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  min-width: 60px;
+  text-align: center;
 }
 
 /* ==================== 编辑器 ==================== */
